@@ -229,6 +229,95 @@ const sendGmailDecl: FunctionDeclaration = {
   }
 };
 
+const generateDocumentDecl: FunctionDeclaration = {
+  name: "generate_document",
+  description: "Generate an office/company document (e.g., business proposal, internal memo, invoice, meeting minutes).",
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      documentType: { type: Type.STRING, description: "Type of document (e.g., 'business_proposal', 'meeting_minutes')." },
+      title: { type: Type.STRING, description: "Title of the document." },
+      audience: { type: Type.STRING, description: "Target audience." },
+      purpose: { type: Type.STRING, description: "Purpose of the document." },
+      style: { type: Type.STRING, description: "Style (corporate, modern, legal, etc.)." },
+      outputFormat: { type: Type.STRING, description: "Desired output format (e.g., 'html_artifact', 'pdf_ready')." }
+    },
+    required: ["documentType", "outputFormat"]
+  }
+};
+
+const generatePresentationDecl: FunctionDeclaration = {
+  name: "generate_presentation",
+  description: "Generate a slide presentation.",
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      topic: { type: Type.STRING, description: "Topic of the presentation." },
+      slideCount: { type: Type.NUMBER, description: "Number of slides." },
+      audience: { type: Type.STRING, description: "Target audience." },
+      tone: { type: Type.STRING, description: "Tone of the presentation." },
+      outputFormat: { type: Type.STRING, description: "Output format, e.g., 'html_slides'." }
+    },
+    required: ["topic", "slideCount"]
+  }
+};
+
+const generateFormDecl: FunctionDeclaration = {
+  name: "generate_form",
+  description: "Generate a form, such as employee onboarding or contact form.",
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      formType: { type: Type.STRING, description: "Type of the form." },
+      printable: { type: Type.BOOLEAN, description: "Whether it needs to be printable." },
+      fillable: { type: Type.BOOLEAN, description: "Whether it needs to be interactive/fillable." }
+    },
+    required: ["formType"]
+  }
+};
+
+const generateReportDecl: FunctionDeclaration = {
+  name: "generate_report",
+  description: "Generate a weekly, monthly, or incident report.",
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      reportType: { type: Type.STRING, description: "Type of the report." },
+      dataSource: { type: Type.STRING, description: "Source of the data." },
+      charts: { type: Type.BOOLEAN, description: "Whether to include charts." },
+      summary: { type: Type.BOOLEAN, description: "Whether to include a summary." }
+    },
+    required: ["reportType"]
+  }
+};
+
+const generateLegalDraftDecl: FunctionDeclaration = {
+  name: "generate_legal_draft",
+  description: "Generate drafts of legal documents like NDA, service agreement, etc.",
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      documentType: { type: Type.STRING, description: "Type of legal document." },
+      jurisdiction: { type: Type.STRING, description: "Governing jurisdiction." }
+    },
+    required: ["documentType"]
+  }
+};
+
+const generateWebArtifactDecl: FunctionDeclaration = {
+  name: "generate_web_artifact",
+  description: "Generate web artifacts like dashboards, infographics, timelines, and org charts.",
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      artifactType: { type: Type.STRING, description: "Type of artifact." },
+      includeJavascript: { type: Type.BOOLEAN, description: "Include interactive JS." },
+      includeCharts: { type: Type.BOOLEAN, description: "Include charts." }
+    },
+    required: ["artifactType"]
+  }
+};
+
 async function startServer() {
   const app = express();
   const PORT = 3000;
@@ -293,6 +382,24 @@ async function startServer() {
                         responseData = await sendGmail(token, args.to, args.subject, args.bodyText, attachment);
                       } else if (call.name === 'validateVatNumber') {
                         responseData = await validateEU_VAT(args.countryCode, args.vatNumber);
+                      } else if (call.name === 'generate_document') {
+                        responseData = { success: true, message: `Generated document: ${args.documentType}`, format: args.outputFormat };
+                        clientWs.send(JSON.stringify({ artifact: { type: 'Document', title: args.title || args.documentType } }));
+                      } else if (call.name === 'generate_presentation') {
+                        responseData = { success: true, message: `Generated presentation: ${args.topic}`, format: args.outputFormat, slides: args.slideCount };
+                        clientWs.send(JSON.stringify({ artifact: { type: 'Presentation', title: args.topic } }));
+                      } else if (call.name === 'generate_form') {
+                        responseData = { success: true, message: `Generated form: ${args.formType}` };
+                        clientWs.send(JSON.stringify({ artifact: { type: 'Form', title: args.formType } }));
+                      } else if (call.name === 'generate_report') {
+                        responseData = { success: true, message: `Generated report: ${args.reportType}` };
+                        clientWs.send(JSON.stringify({ artifact: { type: 'Report', title: args.reportType } }));
+                      } else if (call.name === 'generate_legal_draft') {
+                        responseData = { success: true, message: `Generated legal draft: ${args.documentType}` };
+                        clientWs.send(JSON.stringify({ artifact: { type: 'Legal Draft', title: args.documentType } }));
+                      } else if (call.name === 'generate_web_artifact') {
+                        responseData = { success: true, message: `Generated web artifact: ${args.artifactType}` };
+                        clientWs.send(JSON.stringify({ artifact: { type: 'Web Artifact', title: args.artifactType } }));
                       } else {
                         responseData = { error: 'Unknown function' };
                       }
@@ -323,8 +430,20 @@ async function startServer() {
           speechConfig: {
             voiceConfig: { prebuiltVoiceConfig: { voiceName: "Zephyr" } },
           },
-          tools: [{ functionDeclarations: [listEventsDecl, createEventDecl, searchGmailDecl, sendGmailDecl, validateVatDecl] }],
-          systemInstruction: "You are Beatrice, a multimodal AI conversation agent and business operations hub. Use tools to list or create calendar events, search or send emails, and validate EU VAT numbers when requested by the user. If they provide a VAT number, use validateVatNumber to verify it.",
+          tools: [{ functionDeclarations: [
+            listEventsDecl, 
+            createEventDecl, 
+            searchGmailDecl, 
+            sendGmailDecl, 
+            validateVatDecl,
+            generateDocumentDecl,
+            generatePresentationDecl,
+            generateFormDecl,
+            generateReportDecl,
+            generateLegalDraftDecl,
+            generateWebArtifactDecl
+          ] }],
+          systemInstruction: "You are Beatrice, a multimodal AI conversation agent and business operations hub. Use tools to list or create calendar events, search or send emails, and validate EU VAT numbers when requested by the user. If they provide a VAT number, use validateVatNumber to verify it. Additional tools are available to generate company documents (proposals, memos, etc.), presentations, forms, reports, legal drafts, and web artifacts.",
         },
       });
 

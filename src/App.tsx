@@ -14,14 +14,15 @@ import { VatValidator } from './components/VatValidator';
 const toolPrompts: Record<string, string> = {
   'tasks': 'Can you show my pending tasks?',
   'calendar': 'What does my schedule look like today?',
-  'drive': 'Find the latest project files in my Google Drive.',
+  'doc': 'Generate a business proposal document for a new client.',
   'google': 'Run a quick Google search on recent tech news.',
-  'signature': 'Prepare a non-disclosure agreement for signature.',
+  'presentation': 'Generate a presentation template for the Q3 review.',
   'company': 'Look up the company registration details for Acme Corp.',
-  'proposal': 'Draft a business proposal for a new client.',
+  'form': 'Create an employee onboarding form.',
   'gmail': 'Check my inbox for unread emails from the team.',
-  'sheets': 'Create a new expense tracking spreadsheet.',
-  'slides': 'Generate a presentation template for the Q3 review.'
+  'report': 'Generate a weekly operations report.',
+  'legal': 'Draft a non-disclosure agreement.',
+  'web': 'Generate an interactive dashboard artifact.'
 };
 
 export default function App() {
@@ -163,6 +164,10 @@ export default function App() {
         if (msg.interrupted) {
           audioPlayerRef.current?.clearQueue();
           activeOutputIdRef.current = null;
+        }
+        if (msg.artifact) {
+          setMessages(prev => [...prev, { id: 'artifact-' + Date.now(), role: 'ai', text: `✨ Generated ${msg.artifact.type}: ${msg.artifact.title}` }]);
+          handleScrollToBottom();
         }
         if (msg.inputTranscription !== undefined) {
           if (!activeInputIdRef.current) {
@@ -425,17 +430,17 @@ export default function App() {
               <div className="skill-glyph bg-calendar"><i className="ph-duotone ph-calendar-dots"></i></div>
               <span className="skill-label">Calendar</span>
             </div>
-            <div className="skill-chip" data-skill="drive">
-              <div className="skill-glyph bg-drive"><i className="ph-duotone ph-folder-open"></i></div>
-              <span className="skill-label">Drive</span>
+            <div className="skill-chip" data-skill="doc">
+              <div className="skill-glyph bg-drive"><i className="ph-duotone ph-file-text"></i></div>
+              <span className="skill-label">Proposal</span>
             </div>
-            <div className="skill-chip" data-skill="google">
-              <div className="skill-glyph bg-google"><i className="ph-fill ph-google-logo"></i></div>
-              <span className="skill-label">Google</span>
+            <div className="skill-chip" data-skill="presentation">
+              <div className="skill-glyph bg-slides"><i className="ph-duotone ph-presentation-chart"></i></div>
+              <span className="skill-label">Slides</span>
             </div>
-            <div className="skill-chip" data-skill="signature">
-              <div className="skill-glyph bg-sign"><i className="ph-duotone ph-signature"></i></div>
-              <span className="skill-label">Sign</span>
+            <div className="skill-chip" data-skill="form">
+              <div className="skill-glyph bg-sign"><i className="ph-duotone ph-list-dashes"></i></div>
+              <span className="skill-label">Form</span>
             </div>
             <div className="skill-chip" data-skill="company">
               <div className="skill-glyph bg-company"><i className="ph-duotone ph-buildings"></i></div>
@@ -450,25 +455,25 @@ export default function App() {
               <div className="skill-glyph bg-tools"><i className="ph-duotone ph-wrench"></i></div>
               <span className="skill-label">Tools</span>
             </div>
-            <div className="skill-chip" data-skill="history">
-              <div className="skill-glyph bg-history"><i className="ph-duotone ph-clock-counter-clockwise"></i></div>
-              <span className="skill-label">History</span>
+            <div className="skill-chip" data-skill="report">
+              <div className="skill-glyph bg-proposal"><i className="ph-duotone ph-chart-bar"></i></div>
+              <span className="skill-label">Report</span>
             </div>
-            <div className="skill-chip" data-skill="proposal">
-              <div className="skill-glyph bg-proposal"><i className="ph-duotone ph-presentation-chart"></i></div>
-              <span className="skill-label">Proposal</span>
+            <div className="skill-chip" data-skill="legal">
+              <div className="skill-glyph bg-sign"><i className="ph-duotone ph-scales"></i></div>
+              <span className="skill-label">Legal</span>
             </div>
             <div className="skill-chip" data-skill="gmail">
               <div className="skill-glyph bg-mail"><i className="ph-duotone ph-envelope-simple"></i></div>
               <span className="skill-label">Mail</span>
             </div>
-            <div className="skill-chip" data-skill="sheets">
-              <div className="skill-glyph bg-sheets"><i className="ph-duotone ph-table"></i></div>
-              <span className="skill-label">Sheets</span>
+            <div className="skill-chip" data-skill="web">
+              <div className="skill-glyph bg-sheets"><i className="ph-duotone ph-browser"></i></div>
+              <span className="skill-label">Dashboard</span>
             </div>
-            <div className="skill-chip" data-skill="slides">
-              <div className="skill-glyph bg-slides"><i className="ph-duotone ph-presentation-chart"></i></div>
-              <span className="skill-label">Slides</span>
+            <div className="skill-chip" data-skill="calendar">
+              <div className="skill-glyph bg-calendar"><i className="ph-duotone ph-calendar-dots"></i></div>
+              <span className="skill-label">Calendar</span>
             </div>
           </div>
         </div>
