@@ -22,7 +22,12 @@ const toolPrompts: Record<string, string> = {
   'gmail': 'Check my inbox for unread emails from the team.',
   'report': 'Generate a weekly operations report.',
   'legal': 'Draft a non-disclosure agreement.',
-  'web': 'Generate an interactive dashboard artifact.'
+  'web': 'Generate an interactive dashboard artifact.',
+  'letter': 'Draft a formal business letter to our partners.',
+  'finance': 'Generate an expense financial report.',
+  'certificate': 'Create a certificate of achievement.',
+  'meeting': 'Generate meeting minutes based on our recent discussion.',
+  'tracker': 'Create an interactive project task tracker.'
 };
 
 export default function App() {
@@ -446,6 +451,14 @@ export default function App() {
               <div className="skill-glyph bg-company"><i className="ph-duotone ph-buildings"></i></div>
               <span className="skill-label">Company</span>
             </div>
+            <div className="skill-chip" data-skill="letter">
+              <div className="skill-glyph bg-proposal"><i className="ph-duotone ph-envelope-open"></i></div>
+              <span className="skill-label">Letter</span>
+            </div>
+            <div className="skill-chip" data-skill="finance">
+              <div className="skill-glyph bg-drive"><i className="ph-duotone ph-money"></i></div>
+              <span className="skill-label">Finance</span>
+            </div>
           </div>
         </div>
 
@@ -471,9 +484,17 @@ export default function App() {
               <div className="skill-glyph bg-sheets"><i className="ph-duotone ph-browser"></i></div>
               <span className="skill-label">Dashboard</span>
             </div>
-            <div className="skill-chip" data-skill="calendar">
-              <div className="skill-glyph bg-calendar"><i className="ph-duotone ph-calendar-dots"></i></div>
-              <span className="skill-label">Calendar</span>
+            <div className="skill-chip" data-skill="certificate">
+              <div className="skill-glyph bg-history"><i className="ph-duotone ph-certificate"></i></div>
+              <span className="skill-label">Certificate</span>
+            </div>
+            <div className="skill-chip" data-skill="meeting">
+              <div className="skill-glyph bg-calendar"><i className="ph-duotone ph-users-three"></i></div>
+              <span className="skill-label">Meeting</span>
+            </div>
+            <div className="skill-chip" data-skill="tracker">
+              <div className="skill-glyph bg-tasks"><i className="ph-duotone ph-kanban"></i></div>
+              <span className="skill-label">Tracker</span>
             </div>
           </div>
         </div>
