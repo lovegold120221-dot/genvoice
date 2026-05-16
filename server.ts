@@ -610,20 +610,6 @@ When using tools, think silently but speak naturally after receiving results.${c
   });
 
   // Vite middleware for development
-  if (process.env.NODE_ENV !== "production") {
-    const vite = await createViteServer({
-      server: { middlewareMode: true },
-      appType: "spa",
-    });
-    app.use(vite.middlewares);
-  } else {
-    const distPath = path.join(process.cwd(), "dist");
-    app.use(express.static(distPath));
-    app.get("*", (req, res) => {
-      res.sendFile(path.join(distPath, "index.html"));
-    });
-  }
-
   // Dynamic Filler Endpoint
   app.post("/api/fillers/dynamic", async (req, res) => {
     const { recentHistory, style, maxLength } = req.body;
@@ -697,9 +683,24 @@ ${conversationSummary}`,
       const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
       res.json({ audio: base64Audio });
     } catch(e: any) {
-      res.status(500).json({ error: e.message });
+      console.error("[TTS Error]:", e);
+      res.status(500).json({ error: e.message || String(e) });
     }
   });
+
+  if (process.env.NODE_ENV !== "production") {
+    const vite = await createViteServer({
+      server: { middlewareMode: true },
+      appType: "spa",
+    });
+    app.use(vite.middlewares);
+  } else {
+    const distPath = path.join(process.cwd(), "dist");
+    app.use(express.static(distPath));
+    app.get("*", (req, res) => {
+      res.sendFile(path.join(distPath, "index.html"));
+    });
+  }
 
   server.listen(PORT, "0.0.0.0", () => {
     console.log(`Server running on http://0.0.0.0:${PORT}`);
