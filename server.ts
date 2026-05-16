@@ -624,6 +624,83 @@ When using tools, think silently but speak naturally after receiving results.${c
     });
   }
 
+  // Dynamic Filler Endpoint
+  app.post("/api/fillers/dynamic", async (req, res) => {
+    const { recentHistory, style, maxLength } = req.body;
+    if (!recentHistory || !Array.isArray(recentHistory)) {
+      return res.status(400).json({ error: "recentHistory is required and must be an array" });
+    }
+
+    const conversationSummary = recentHistory.map((h: any) => `${h.role}: ${h.text}`).join('\n');
+    
+    try {
+      const response = await ai.models.generateContent({
+        model: "gemini-3.1-flash-preview",
+        contents: `You generate short silent-filler questions for a voice assistant.
+
+Task:
+Create one short trivia-style question based on the user's recent conversation topics.
+
+Rules:
+- One sentence only.
+- Must begin with: "Do you have any idea"
+- Must be specific, not broad.
+- Must feel related to the user's past conversations.
+- Must not reveal private details.
+- Must not mention passwords, secrets, tokens, or credentials.
+- Must not trigger a task or command.
+- Must not ask for confirmation.
+- Maximum ${maxLength || 120} characters if possible.
+- Return JSON only.
+
+Recent conversation summary:
+${conversationSummary}`,
+        config: {
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              text: { type: Type.STRING },
+              topic: { type: Type.STRING }
+            },
+            required: ["text", "topic"]
+          }
+        }
+      });
+
+      const output = JSON.parse(response.text || '{}');
+      res.json({
+        ok: true,
+        text: output.text,
+        topic: output.topic,
+        source: "conversation_memory"
+      });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // TTS Endpoint
+  app.post("/api/tts", async (req, res) => {
+    const { text } = req.body;
+    try {
+      const response = await ai.models.generateContent({
+        model: "gemini-3.1-flash-tts-preview",
+        contents: [{ parts: [{ text }] }],
+        config: {
+          responseModalities: [Modality.AUDIO],
+          speechConfig: {
+            voiceConfig: { prebuiltVoiceConfig: { voiceName: "Aoede" } }
+          }
+        }
+      });
+      const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+      res.json({ audio: base64Audio });
+    } catch(e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
   server.listen(PORT, "0.0.0.0", () => {
     console.log(`Server running on http://0.0.0.0:${PORT}`);
   });

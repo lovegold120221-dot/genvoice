@@ -283,6 +283,8 @@ button:active, .skill-chip:active, .nav-item:active, .list-item:active {
   animation: slideUp 0.3s cubic-bezier(0.2, 0, 0, 1) forwards;
   max-width: 85%;
   letter-spacing: -0.2px;
+  overflow: clip;
+  overflow-wrap: anywhere;
 }
 
 .conversation-message.user {

@@ -4,8 +4,9 @@
  */
 
 import { AudioStreamPlayer, pcmToBase64 } from './lib/audio';
-import { initAuth, googleSignIn, logout } from './lib/auth';
+import { initAuth, googleSignIn, logout, db } from './lib/auth';
 import type { User as FirebaseUser } from 'firebase/auth';
+import { doc, setDoc, getDoc } from 'firebase/firestore';
 import React, { useState, useRef, useEffect } from 'react';
 
 import { LoginScreen } from './components/LoginScreen';
@@ -58,6 +59,13 @@ export default function App() {
   const [userName, setUserName] = useState('');
   const [backgroundPersona, setBackgroundPersona] = useState('');
 
+  // Filler Settings
+  const [silentFillersEnabled, setSilentFillersEnabled] = useState(true);
+  const lastInteractionTimeRef = useRef<number>(Date.now());
+  const fillerCooldownMs = 30000;
+  const silenceFillerDelayMs = 12000;
+  const lastFillerTimeRef = useRef<number>(0);
+
   // Chat State
   const [messages, setMessages] = useState<{ id: string, role: 'user' | 'ai', text: string, isStreaming?: boolean }[]>([
     { id: 'init-1', role: 'ai', text: 'Hello! I am connected.. Ready to automate a task?' },
@@ -84,15 +92,45 @@ export default function App() {
 
   useEffect(() => {
     const unsubscribe = initAuth(
-      (user, token) => {
+      async (user, token) => {
         setNeedsAuth(false);
         setUser(user);
         setToken(token);
+        // Load user persona settings
+        try {
+          const docRef = doc(db, 'users', user.uid);
+          const docSnap = await getDoc(docRef);
+          if (docSnap.exists()) {
+            const data = docSnap.data();
+            if (data.language) setLanguage(data.language);
+            if (data.personaName) setPersonaName(data.personaName);
+            if (data.userName) setUserName(data.userName);
+            if (data.backgroundPersona) setBackgroundPersona(data.backgroundPersona);
+          }
+        } catch (err) {
+          console.error("Failed to load user profile:", err);
+        }
       },
       () => setNeedsAuth(true)
     );
     return () => unsubscribe();
   }, []);
+
+  const savePersonaConfig = async () => {
+    if (!user) return;
+    try {
+      await setDoc(doc(db, 'users', user.uid), {
+        language,
+        personaName,
+        userName,
+        backgroundPersona
+      }, { merge: true });
+      alert("Settings saved successfully!");
+    } catch(err) {
+      console.error(err);
+      alert("Failed to save settings.");
+    }
+  };
 
   const handleLogin = async () => {
     setIsLoggingIn(true);
@@ -190,6 +228,7 @@ export default function App() {
         }
         if (msg.inputTranscription !== undefined) {
           if (!activeInputIdRef.current) {
+            audioPlayerRef.current?.clearQueue();
             const id = 'input-' + Date.now() + '-' + Math.random();
             activeInputIdRef.current = id;
             setMessages(prev => [...prev, { id, role: 'user', text: msg.inputTranscription, isStreaming: !msg.isFinal }]);
@@ -203,6 +242,7 @@ export default function App() {
         }
         if (msg.outputTranscription !== undefined) {
           if (!activeOutputIdRef.current) {
+            audioPlayerRef.current?.clearQueue();
             const id = 'output-' + Date.now() + '-' + Math.random();
             activeOutputIdRef.current = id;
             setMessages(prev => [...prev, { id, role: 'ai', text: msg.outputTranscription, isStreaming: !msg.isFinal }]);
@@ -334,7 +374,118 @@ export default function App() {
 
   useEffect(() => {
     handleScrollToBottom();
+    const finalMessages = messages.filter(m => !m.isStreaming);
+    localStorage.setItem("conversation_history", JSON.stringify(finalMessages.slice(-100)));
+    lastInteractionTimeRef.current = Date.now();
   }, [messages]);
+
+  const isSafeFiller = (text: string) => {
+    const blockedTerms = [
+      "password", "ssh password", "token", "secret key",
+      "private key", "credit card", "bank account"
+    ];
+    const lower = text.toLowerCase();
+    if (!text.toLowerCase().startsWith("do you have any idea")) return false;
+    if (text.length > 180) return false;
+    return !blockedTerms.some(term => lower.includes(term));
+  };
+
+  const wasRecentlyUsedFiller = (text: string) => {
+    const fillers = JSON.parse(localStorage.getItem("recent_fillers") || "[]");
+    return fillers.some((item: any) => item.text === text);
+  };
+
+  const saveRecentFiller = (text: string) => {
+    const fillers = JSON.parse(localStorage.getItem("recent_fillers") || "[]");
+    fillers.push({ text, timestamp: Date.now() });
+    localStorage.setItem("recent_fillers", JSON.stringify(fillers.slice(-20)));
+  };
+
+  const speakAssistantText = async (text: string) => {
+    try {
+      const response = await fetch("/api/tts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text })
+      });
+      if (!response.ok) {
+        const errText = await response.text();
+        throw new Error(`TTS failed: ${errText}`);
+      }
+      const data = await response.json();
+      if (data.audio) {
+        if (!audioPlayerRef.current) {
+          audioPlayerRef.current = new AudioStreamPlayer();
+        }
+        audioPlayerRef.current.clearQueue();
+        audioPlayerRef.current.playChunk(data.audio);
+      }
+    } catch(err) {
+      console.error(err);
+    }
+  };
+
+  const triggerSilentFiller = async () => {
+    const now = Date.now();
+    if (!isConnected) return;
+    if (activeInputIdRef.current || activeOutputIdRef.current) return;
+    
+    if (now - lastFillerTimeRef.current < fillerCooldownMs) return;
+
+    lastFillerTimeRef.current = now;
+    lastInteractionTimeRef.current = now;
+
+    let fillerText = "Do you have any idea how AI agents decide which tool to use?";
+    try {
+      const history = JSON.parse(localStorage.getItem("conversation_history") || "[]");
+      const recentHistory = history.slice(-30);
+      
+      if (recentHistory.length > 0) {
+        const response = await fetch("/api/fillers/dynamic", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            recentHistory,
+            style: "short_trivia_question",
+            maxLength: 120
+          })
+        });
+        
+        if (response.ok) {
+          const result = await response.json();
+          if (result && result.text) fillerText = result.text;
+        }
+      }
+    } catch(err) {
+      console.error(err);
+    }
+
+    if (!isSafeFiller(fillerText)) {
+      fillerText = "Do you have any idea how a complex task is broken down into simple steps?";
+    }
+
+    if (wasRecentlyUsedFiller(fillerText)) {
+      fillerText = "Do you have any idea why automation systems need a command queue?";
+    }
+
+    saveRecentFiller(fillerText);
+    
+    setMessages(prev => [...prev, { id: 'filler-' + Date.now(), role: 'ai', text: fillerText }]);
+    speakAssistantText(fillerText);
+  };
+
+  useEffect(() => {
+    if (!silentFillersEnabled) return;
+    const interval = setInterval(() => {
+      const now = Date.now();
+      if (isConnected && !activeInputIdRef.current && !activeOutputIdRef.current) {
+        if (now - lastInteractionTimeRef.current > silenceFillerDelayMs) {
+          triggerSilentFiller();
+        }
+      }
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [isConnected, silentFillersEnabled]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -357,6 +508,7 @@ export default function App() {
     if (!textToSend && !attachedFile) return;
 
     // Append user message
+    audioPlayerRef.current?.clearQueue();
     setMessages(prev => [...prev, { id: 'text-' + Date.now() + '-' + Math.random(), role: 'user', text: textToSend || 'Sent a file' }]);
     
     if (wsRef.current && isConnected) {
@@ -658,6 +810,14 @@ export default function App() {
             </div>
           </div>
 
+          <button className="list-item w-full bg-accent/10 hover:bg-accent/20 text-accent border border-accent/20 mb-4" onClick={savePersonaConfig}>
+            <i className="ph ph-floppy-disk list-item-icon text-accent"></i>
+            <div className="list-item-content text-left">
+              <div className="list-item-title text-accent -mb-0.5" style={{ color: 'var(--color-accent-primary)' }}>Save Configuration</div>
+              <div className="list-item-desc text-accent/80" style={{ color: 'var(--color-accent-primary)' }}>Update your persona profile</div>
+            </div>
+          </button>
+
           <button className="list-item w-full bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/20" onClick={async () => {
             await logout();
             setNeedsAuth(true);
@@ -683,6 +843,13 @@ export default function App() {
             <div className="list-item-content">
               <div className="list-item-title">Persona Settings</div>
               <div className="list-item-desc">Adjust AI tone and behavior</div>
+            </div>
+          </div>
+          <div className="list-item" onClick={() => setSilentFillersEnabled(!silentFillersEnabled)} style={{ cursor: 'pointer' }}>
+            <i className={`ph ${silentFillersEnabled ? 'ph-toggle-right text-accent' : 'ph-toggle-left'} list-item-icon`}></i>
+            <div className="list-item-content">
+              <div className="list-item-title">Silent Fillers</div>
+              <div className="list-item-desc">Ask trivia using conversation memory when silent</div>
             </div>
           </div>
           <div className="list-item">
