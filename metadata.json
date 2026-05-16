@@ -1,0 +1,12 @@
+{
+  "name": "Eburon AI",
+  "description": "Multimodal AI conversation agent and business operations hub.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone",
+    "geolocation"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
