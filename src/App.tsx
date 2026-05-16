@@ -68,10 +68,7 @@ export default function App() {
   const lastFillerTimeRef = useRef<number>(0);
 
   // Chat State
-  const [messages, setMessages] = useState<{ id: string, role: 'user' | 'ai', text: string, isStreaming?: boolean }[]>([
-    { id: 'init-1', role: 'ai', text: 'Hello! I am connected.. Ready to automate a task?' },
-    { id: 'init-2', role: 'ai', text: "Hey Boss! I'm Beatrice. Tap a skill above to see me in action!" }
-  ]);
+  const [messages, setMessages] = useState<{ id: string, role: 'user' | 'ai', text: string, isStreaming?: boolean }[]>([]);
 
   const activeInputIdRef = useRef<string | null>(null);
   const activeOutputIdRef = useRef<string | null>(null);
@@ -217,6 +214,22 @@ export default function App() {
       ws.onopen = () => {
         setIsConnected(true);
         setIsMicActive(true);
+        
+        try {
+          const historyData = localStorage.getItem("conversation_history");
+          const history = historyData ? JSON.parse(historyData) : [];
+          const userTopics = history.filter((h: any) => h.role === 'user').map((h: any) => h.text).slice(-3).join(" | ");
+          
+          let introPrompt = '';
+          if (userTopics && userTopics.trim().length > 5) {
+            introPrompt = `[System Message: We have just connected a new live session. Please start the conversation by warmly and naturally greeting the user. IMPORTANT: You must pick a topic or reference something from our past conversation history as an ice breaker: "${userTopics}". Smoothly bring it up. Remember to maintain your profound human realism, warmth, and emotion. Start immediately.]`;
+          } else {
+            introPrompt = `[System Message: We have just connected a new live session. Please start the conversation by warmly and naturally greeting the user as if starting a video or phone call. Remember to maintain your profound human realism, warmth, and emotion. Start immediately.]`;
+          }
+          ws.send(JSON.stringify({ text: introPrompt }));
+        } catch (e) {
+          console.error("Error sending intro:", e);
+        }
       };
 
       ws.onmessage = (event) => {
@@ -811,28 +824,22 @@ export default function App() {
         </div>
 
         <nav className="nav-controls relative">
-          <button className="nav-item opacity-70 hover:opacity-100 transition-opacity" onClick={() => setActiveOverlay('overlay-profile')}>
-            <i className="ph ph-user"></i> <span>Profile</span>
+          <button className="nav-item transition-opacity" onClick={() => setActiveOverlay('overlay-profile')}>
+            <i className="ph ph-user"></i>
           </button>
-          <button className="nav-item opacity-70 hover:opacity-100 transition-opacity" onClick={() => startVideo('camera')}>
-            <i className="ph ph-video-camera"></i> <span>Camera</span>
+          <button className="nav-item transition-opacity" onClick={() => startVideo('camera')}>
+            <i className="ph ph-video-camera"></i>
           </button>
           <div className="nav-item-mic-container">
-            <button className="nav-item-mic relative" onClick={() => setIsMicActive(!isMicActive)} style={{ backgroundColor: isMicActive && isConnected ? 'var(--color-accent-primary)' : 'var(--color-bg-chip)' }}>
+            <button id="mic-visualizer" className={`nav-item-mic relative ${isMicActive && isConnected ? 'active-listening' : ''}`} onClick={() => setIsMicActive(!isMicActive)} style={{ backgroundColor: isMicActive && isConnected ? 'var(--color-accent-primary)' : 'var(--color-bg-chip)' }}>
               <i className={`ph-fill ph-microphone${!isMicActive ? '-slash' : ''}`}></i>
-              {isMicActive && isConnected && (
-                <div id="mic-visualizer" className="audio-visualizer mic-vis absolute -top-8 left-1/2 -translate-x-1/2">
-                  <div className="bar"></div><div className="bar"></div><div className="bar"></div><div className="bar"></div>
-                </div>
-              )}
             </button>
-            <span className="mic-label">Mic</span>
           </div>
-          <button className="nav-item opacity-70 hover:opacity-100 transition-opacity" onClick={() => setActiveOverlay('overlay-tasks')}>
-            <i className="ph ph-list-checks"></i> <span>Tasks</span>
+          <button className="nav-item transition-opacity" onClick={() => setActiveOverlay('overlay-tasks')}>
+            <i className="ph ph-list-checks"></i>
           </button>
-          <button className="nav-item opacity-70 hover:opacity-100 transition-opacity" onClick={() => setActiveOverlay('overlay-settings')}>
-            <i className="ph ph-gear"></i> <span>Settings</span>
+          <button className="nav-item transition-opacity" onClick={() => setActiveOverlay('overlay-settings')}>
+            <i className="ph ph-gear"></i>
           </button>
         </nav>
       </div>
@@ -1058,9 +1065,14 @@ export default function App() {
           </div>
           <button className="close-overlay-btn" onClick={() => setActiveOverlay(null)}><i className="ph ph-x"></i></button>
         </div>
-        <div style={{ height: 'calc(100vh - 64px)', overflow: 'auto', padding: '20px', backgroundColor: '#f0f0f5', color: '#1a1a1a' }}>
+        <div style={{ height: 'calc(100vh - 64px)', overflow: 'auto', padding: activeArtifact?.content ? '0' : '20px', backgroundColor: '#f0f0f5', color: '#1a1a1a', display: 'flex', flexDirection: 'column' }}>
           {activeArtifact?.content ? (
-            <div dangerouslySetInnerHTML={{ __html: activeArtifact.content }} />
+            <iframe 
+              srcDoc={activeArtifact.content}
+              className="w-full flex-grow border-none bg-white"
+              title={activeArtifact.title}
+              sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+            />
           ) : (
             <div className="flex flex-col items-center justify-center h-full text-gray-500 gap-4">
               <i className="ph-duotone ph-file-code text-6xl text-gray-400"></i>

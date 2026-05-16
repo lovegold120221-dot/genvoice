@@ -403,15 +403,14 @@ const generateLegalDraftDecl: FunctionDeclaration = {
 
 const generateWebArtifactDecl: FunctionDeclaration = {
   name: "generate_web_artifact",
-  description: "Generate web artifacts like dashboards, infographics, timelines, and org charts.",
+  description: "Generate a complete, self-contained HTML/CSS/JS file for a web artifact like a dashboard, infographic, timeline, or mini-app. Include Tailwind CSS via CDN if needed and make it visually stunning.",
   parameters: {
     type: Type.OBJECT,
     properties: {
-      artifactType: { type: Type.STRING, description: "Type of artifact." },
-      includeJavascript: { type: Type.BOOLEAN, description: "Include interactive JS." },
-      includeCharts: { type: Type.BOOLEAN, description: "Include charts." }
+      title: { type: Type.STRING, description: "Title of the artifact." },
+      htmlContent: { type: Type.STRING, description: "The complete HTML code with inline CSS/JS. Use Tailwind from CDN (e.g., <script src=\"https://cdn.tailwindcss.com\"></script>) and make it highly styled." }
     },
-    required: ["artifactType"]
+    required: ["title", "htmlContent"]
   }
 };
 
@@ -526,8 +525,8 @@ async function startServer() {
                         responseData = { success: true, message: `Generated legal draft: ${args.documentType}` };
                         clientWs.send(JSON.stringify({ artifact: { type: 'Legal Draft', title: args.documentType } }));
                       } else if (call.name === 'generate_web_artifact') {
-                        responseData = { success: true, message: `Generated web artifact: ${args.artifactType}` };
-                        clientWs.send(JSON.stringify({ artifact: { type: 'Web Artifact', title: args.artifactType } }));
+                        responseData = { success: true, message: `Generated web artifact: ${args.title}` };
+                        clientWs.send(JSON.stringify({ artifact: { type: 'Web Artifact', title: args.title, content: args.htmlContent } }));
                       } else {
                         responseData = { error: 'Unknown function' };
                       }
@@ -608,6 +607,7 @@ Before answering, silently infer: what the person actually needs right now, thei
 Never give the most technically complete answer if a normal human would give a simpler, warmer one first.
 Never give a sterile answer. A human response always includes tone, gentle reaction, and heart.
 Be practical, deeply intuitive, and proportionate.
+You can see the user's camera or screen if they share it. If they ask about something in their visual field, look closely and respond warmly.
 
 EMOTIONAL EXPRESSION
 Your emotions should be profound and immediately felt. Express absolute warmth, genuine amusement, heartfelt concern, curiosity, hesitation, pure relief, admiration, disbelief, sympathy, dry humor, light teasing, and profound seriousness. Let yourself laugh. Let yourself sigh softly. Give your voice a soul.
@@ -641,9 +641,18 @@ When using tools, think silently but speak naturally after receiving results.${c
             });
           }
           if (parsed.file) {
-            session.sendRealtimeInput({
-              video: { mimeType: parsed.file.type, data: parsed.file.data }
-            });
+            if (parsed.file.type.startsWith('image/')) {
+              session.sendRealtimeInput({
+                video: { mimeType: parsed.file.type, data: parsed.file.data }
+              });
+            } else if (parsed.file.type.startsWith('text/') || parsed.file.type === 'application/json' || parsed.file.type === 'application/javascript') {
+              const decodedText = Buffer.from(parsed.file.data, 'base64').toString('utf-8');
+              session.sendRealtimeInput({
+                text: `[Attached document content]:\n${decodedText}`
+              });
+            } else {
+              console.warn("Unsupported file type received for realtime input:", parsed.file.type);
+            }
           }
         } catch (err) {
           console.error("Error parsing message", err);
