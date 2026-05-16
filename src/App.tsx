@@ -11,6 +11,7 @@ import React, { useState, useRef, useEffect } from 'react';
 
 import { LoginScreen } from './components/LoginScreen';
 import { VatValidator } from './components/VatValidator';
+import { DOCUMENT_SKILLS, generateDocumentArtifact, detectDocumentSkillFromText } from './lib/artifacts';
 
 const toolPrompts: Record<string, string> = {
   'tasks': 'Can you show my pending tasks?',
@@ -30,6 +31,22 @@ const toolPrompts: Record<string, string> = {
   'meeting': 'Generate meeting minutes based on our recent discussion.',
   'tracker': 'Create an interactive project task tracker.'
 };
+
+// Module-level artifact store
+let generatedArtifacts: Record<string, any> = {};
+try {
+  const saved = JSON.parse(localStorage.getItem("generated_artifacts") || "{}");
+  generatedArtifacts = { ...generatedArtifacts, ...saved };
+} catch(e) {}
+
+function storeArtifact(artifact: any) {
+  generatedArtifacts[artifact.id] = artifact;
+  try {
+    const saved = JSON.parse(localStorage.getItem("generated_artifacts") || "{}");
+    saved[artifact.id] = artifact;
+    localStorage.setItem("generated_artifacts", JSON.stringify(saved));
+  } catch(e) {}
+}
 
 export default function App() {
   const [inputValue, setInputValue] = useState('');
@@ -68,7 +85,7 @@ export default function App() {
   const lastFillerTimeRef = useRef<number>(0);
 
   // Chat State
-  const [messages, setMessages] = useState<{ id: string, role: 'user' | 'ai', text: string, isStreaming?: boolean }[]>([]);
+  const [messages, setMessages] = useState<{ id: string, role: 'user' | 'ai', text: string, isStreaming?: boolean, artifactId?: string }[]>([]);
 
   const activeInputIdRef = useRef<string | null>(null);
   const activeOutputIdRef = useRef<string | null>(null);
@@ -262,9 +279,42 @@ export default function App() {
             audioPlayerRef.current?.clearQueue();
             const id = 'input-' + Date.now() + '-' + Math.random();
             activeInputIdRef.current = id;
-            setMessages(prev => [...prev, { id, role: 'user', text: msg.inputTranscription, isStreaming: !msg.isFinal }]);
+            setMessages(prev => {
+               const newMsg = { id, role: 'user' as const, text: msg.inputTranscription, isStreaming: !msg.isFinal };
+               if (msg.isFinal) {
+                 const skillId = detectDocumentSkillFromText(newMsg.text);
+                 if (skillId) {
+                    setTimeout(() => {
+                      try {
+                        const artifact = generateDocumentArtifact(skillId, newMsg.text);
+                        storeArtifact(artifact);
+                        setMessages(pm => [...pm, { id: 'artifact-' + Date.now(), role: 'ai', text: "", artifactId: artifact.id }]);
+                      } catch(e) {}
+                    }, 50);
+                 }
+               }
+               return [...prev, newMsg];
+            });
           } else {
-            setMessages(prev => prev.map(m => m.id === activeInputIdRef.current ? { ...m, text: m.text + msg.inputTranscription, isStreaming: !msg.isFinal } : m));
+            setMessages(prev => {
+              const newMessages = prev.map(m => m.id === activeInputIdRef.current ? { ...m, text: m.text + msg.inputTranscription, isStreaming: !msg.isFinal } : m);
+              if (msg.isFinal) {
+                const finalMsg = newMessages.find(m => m.id === activeInputIdRef.current);
+                if (finalMsg && finalMsg.text) {
+                   const skillId = detectDocumentSkillFromText(finalMsg.text);
+                   if (skillId) {
+                      setTimeout(() => {
+                        try {
+                          const artifact = generateDocumentArtifact(skillId, finalMsg.text);
+                          storeArtifact(artifact);
+                          setMessages(pm => [...pm, { id: 'artifact-' + Date.now(), role: 'ai', text: "", artifactId: artifact.id }]);
+                        } catch(e) {}
+                      }, 50);
+                   }
+                }
+              }
+              return newMessages;
+            });
           }
           if (msg.isFinal) {
             activeInputIdRef.current = null;
@@ -610,6 +660,28 @@ export default function App() {
     audioPlayerRef.current?.clearQueue();
     setMessages(prev => [...prev, { id: 'text-' + Date.now() + '-' + Math.random(), role: 'user', text: textToSend || 'Sent a file' }]);
     
+    // Process document skill routing if matched from text
+    if (textToSend) {
+      const skillId = detectDocumentSkillFromText(textToSend);
+      if (skillId) {
+        setTimeout(() => {
+          try {
+            const artifact = generateDocumentArtifact(skillId, textToSend);
+            storeArtifact(artifact);
+            setMessages(pm => [...pm, { id: 'artifact-' + Date.now(), role: 'ai', text: "", artifactId: artifact.id }]);
+          } catch(e) {}
+        }, 50);
+        setInputValue('');
+        setAttachedFile(null);
+        handleScrollToBottom();
+        // optionally return here if we want to stop it going to the websocket, 
+        // but if we are in live API maybe we still send it?
+        // the user's snippet for handleVoiceTranscript doesn't indicate stopping the WS call, 
+        // but they showed sending a local mock message if not matched. Let's just return to make it purely frontend.
+        return;
+      }
+    }
+
     if (wsRef.current && isConnected) {
       const payload: any = {};
       if (textToSend) {
@@ -645,10 +717,26 @@ export default function App() {
     const chip = target.closest('.skill-chip');
     if (!chip) return;
 
+    const docSkillId = chip.getAttribute('data-doc-skill');
+    if (docSkillId) {
+      if (!DOCUMENT_SKILLS[docSkillId]) return;
+      const prompt = inputValue.trim();
+      handleSend(prompt || `Create ${DOCUMENT_SKILLS[docSkillId].label}`);
+      
+      try {
+        const artifact = generateDocumentArtifact(docSkillId, prompt);
+        storeArtifact(artifact);
+        setMessages(prev => [...prev, { id: 'artifact-' + Date.now(), role: 'ai', text: "", artifactId: artifact.id }]);
+      } catch (err: any) {
+        setMessages(prev => [...prev, { id: 'error-' + Date.now(), role: 'ai', text: `Artifact generation failed: ${err.message}` }]);
+      }
+      return;
+    }
+
     const toolId = chip.getAttribute('data-skill');
     if (!toolId) return;
 
-    if (toolId === 'history' || toolId === 'tools') {
+    if (toolId === 'history' || toolId === 'tools' || toolId === 'documents') {
       setActiveOverlay('overlay-' + toolId);
     } else if (toolId === 'company') { // Our VAT validator
       setShowVatModal(true);
@@ -690,74 +778,62 @@ export default function App() {
       <div id="skills-rail" onClick={handleSkillClick}>
         <div className="skills-row" data-row="1" ref={row1Ref}>
           <div className="skills-track">
-            <div className="skill-chip" data-skill="tasks">
-              <div className="skill-glyph bg-tasks"><i className="ph-duotone ph-list-checks"></i></div>
-              <span className="skill-label">Tasks</span>
-            </div>
-            <div className="skill-chip" data-skill="calendar">
-              <div className="skill-glyph bg-calendar"><i className="ph-duotone ph-calendar-dots"></i></div>
-              <span className="skill-label">Calendar</span>
-            </div>
-            <div className="skill-chip" data-skill="doc">
-              <div className="skill-glyph bg-drive"><i className="ph-duotone ph-file-text"></i></div>
+            <div className="skill-chip" data-doc-skill="business_proposal">
+              <div className="skill-glyph bg-proposal"><i className="ph-duotone ph-presentation-chart"></i></div>
               <span className="skill-label">Proposal</span>
             </div>
-            <div className="skill-chip" data-skill="presentation">
-              <div className="skill-glyph bg-slides"><i className="ph-duotone ph-presentation-chart"></i></div>
+            <div className="skill-chip" data-doc-skill="slide_deck">
+              <div className="skill-glyph bg-slides"><i className="ph-duotone ph-presentation"></i></div>
               <span className="skill-label">Slides</span>
             </div>
-            <div className="skill-chip" data-skill="form">
-              <div className="skill-glyph bg-sign"><i className="ph-duotone ph-list-dashes"></i></div>
-              <span className="skill-label">Form</span>
+            <div className="skill-chip" data-doc-skill="meeting_minutes">
+              <div className="skill-glyph bg-tools"><i className="ph-duotone ph-file-text"></i></div>
+              <span className="skill-label">Minutes</span>
             </div>
-            <div className="skill-chip" data-skill="company">
-              <div className="skill-glyph bg-company"><i className="ph-duotone ph-buildings"></i></div>
-              <span className="skill-label">Company</span>
+            <div className="skill-chip" data-doc-skill="invoice">
+              <div className="skill-glyph bg-sheets"><i className="ph-duotone ph-receipt"></i></div>
+              <span className="skill-label">Invoice</span>
             </div>
-            <div className="skill-chip" data-skill="letter">
-              <div className="skill-glyph bg-proposal"><i className="ph-duotone ph-envelope-open"></i></div>
-              <span className="skill-label">Letter</span>
-            </div>
-            <div className="skill-chip" data-skill="finance">
-              <div className="skill-glyph bg-drive"><i className="ph-duotone ph-money"></i></div>
-              <span className="skill-label">Finance</span>
+            <div className="skill-chip" data-doc-skill="dashboard_artifact">
+              <div className="skill-glyph bg-company"><i className="ph-duotone ph-layout"></i></div>
+              <span className="skill-label">Dashboard</span>
             </div>
           </div>
         </div>
 
         <div className="skills-row" data-row="2" ref={row2Ref}>
           <div className="skills-track">
+            <div className="skill-chip" data-skill="documents">
+              <div className="skill-glyph bg-history"><i className="ph-duotone ph-files"></i></div>
+              <span className="skill-label">Library</span>
+            </div>
+            <div className="skill-chip" data-doc-skill="tracker_table">
+              <div className="skill-glyph bg-tasks"><i className="ph-duotone ph-kanban"></i></div>
+              <span className="skill-label">Tracker</span>
+            </div>
+            <div className="skill-chip" data-doc-skill="formal_letter">
+              <div className="skill-glyph bg-proposal"><i className="ph-duotone ph-envelope-open"></i></div>
+              <span className="skill-label">Letter</span>
+            </div>
+            <div className="skill-chip" data-doc-skill="hr_form">
+              <div className="skill-glyph bg-sign"><i className="ph-duotone ph-list-dashes"></i></div>
+              <span className="skill-label">Form</span>
+            </div>
+            <div className="skill-chip" data-doc-skill="certificate">
+              <div className="skill-glyph bg-history"><i className="ph-duotone ph-certificate"></i></div>
+              <span className="skill-label">Certificate</span>
+            </div>
             <div className="skill-chip" data-skill="tools">
               <div className="skill-glyph bg-tools"><i className="ph-duotone ph-wrench"></i></div>
               <span className="skill-label">Tools</span>
             </div>
-            <div className="skill-chip" data-skill="report">
-              <div className="skill-glyph bg-proposal"><i className="ph-duotone ph-chart-bar"></i></div>
-              <span className="skill-label">Report</span>
+            <div className="skill-chip" data-skill="history">
+              <div className="skill-glyph bg-history"><i className="ph-duotone ph-clock"></i></div>
+              <span className="skill-label">History</span>
             </div>
-            <div className="skill-chip" data-skill="legal">
-              <div className="skill-glyph bg-sign"><i className="ph-duotone ph-scales"></i></div>
-              <span className="skill-label">Legal</span>
-            </div>
-            <div className="skill-chip" data-skill="gmail">
-              <div className="skill-glyph bg-mail"><i className="ph-duotone ph-envelope-simple"></i></div>
-              <span className="skill-label">Mail</span>
-            </div>
-            <div className="skill-chip" data-skill="web">
-              <div className="skill-glyph bg-sheets"><i className="ph-duotone ph-browser"></i></div>
-              <span className="skill-label">Dashboard</span>
-            </div>
-            <div className="skill-chip" data-skill="certificate">
-              <div className="skill-glyph bg-history"><i className="ph-duotone ph-certificate"></i></div>
-              <span className="skill-label">Certificate</span>
-            </div>
-            <div className="skill-chip" data-skill="meeting">
-              <div className="skill-glyph bg-calendar"><i className="ph-duotone ph-users-three"></i></div>
-              <span className="skill-label">Meeting</span>
-            </div>
-            <div className="skill-chip" data-skill="tracker">
-              <div className="skill-glyph bg-tasks"><i className="ph-duotone ph-kanban"></i></div>
-              <span className="skill-label">Tracker</span>
+            <div className="skill-chip" data-skill="tasks">
+               <div className="skill-glyph bg-tasks"><i className="ph-duotone ph-list-checks"></i></div>
+               <span className="skill-label">Tasks</span>
             </div>
           </div>
         </div>
@@ -766,12 +842,64 @@ export default function App() {
       {/* Chat Stream */}
       <main id="text-streaming-area" ref={chatAreaRef}>
         <div id="conversation-container">
-          {messages.map((msg) => (
-            <div key={msg.id} className={`conversation-message ${msg.role}`}>
-              {msg.text}
-              {msg.isStreaming && <span className="opacity-50 inline-block ml-1 animate-pulse">...</span>}
-            </div>
-          ))}
+          {messages.map((msg) => {
+            if (msg.artifactId) {
+              const artifact = generatedArtifacts[msg.artifactId];
+              if (!artifact) return null;
+              return (
+                <div key={msg.id} className={`conversation-message ${msg.role} artifact-card`} style={{ padding: '16px', borderRadius: '18px', border: '1px solid var(--color-border-color)', backgroundColor: 'var(--color-bg-chip)' }}>
+                  <div style={{ fontSize: '16px', fontWeight: 700, marginBottom: '6px' }}>{artifact.title}</div>
+                  <div style={{ color: 'var(--color-text-muted)', fontSize: '12px', marginBottom: '10px' }}>
+                    {artifact.documentType} · {artifact.artifactType}
+                  </div>
+                  <p style={{ color: 'var(--color-text-main)', fontSize: '14px', lineHeight: '1.4', marginBottom: '12px' }}>
+                    {artifact.summary}
+                  </p>
+                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                    <button 
+                      onClick={() => {
+                        setActiveArtifact({ type: artifact.documentType, title: artifact.title, content: artifact.html });
+                        setActiveOverlay('overlay-artifact');
+                      }}
+                      style={{ background: 'var(--color-accent-primary)', color: 'white', border: 'none', padding: '8px 14px', borderRadius: '14px', fontWeight: 600, cursor: 'pointer' }}
+                    >Open</button>
+                    <button 
+                      onClick={() => {
+                        const printWindow = window.open("", "_blank");
+                        if (printWindow) {
+                          printWindow.document.open();
+                          printWindow.document.write(artifact.html);
+                          printWindow.document.close();
+                          printWindow.onload = () => { printWindow.focus(); printWindow.print(); };
+                        }
+                      }}
+                      style={{ background: 'var(--color-bg-main)', color: 'white', border: '1px solid var(--color-border-color)', padding: '8px 14px', borderRadius: '14px', fontWeight: 600, cursor: 'pointer' }}
+                    >Print</button>
+                    <button 
+                      onClick={() => {
+                        const blob = new Blob([artifact.html], { type: "text/html" });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement("a");
+                        a.href = url;
+                        a.download = `${artifact.documentType}-${artifact.id}.html`;
+                        document.body.appendChild(a);
+                        a.click();
+                        a.remove();
+                        URL.revokeObjectURL(url);
+                      }}
+                      style={{ background: 'var(--color-bg-main)', color: 'white', border: '1px solid var(--color-border-color)', padding: '8px 14px', borderRadius: '14px', fontWeight: 600, cursor: 'pointer' }}
+                    >Download</button>
+                  </div>
+                </div>
+              );
+            }
+            return (
+              <div key={msg.id} className={`conversation-message ${msg.role}`}>
+                {msg.text}
+                {msg.isStreaming && <span className="opacity-50 inline-block ml-1 animate-pulse">...</span>}
+              </div>
+            );
+          })}
         </div>
       </main>
 
@@ -1098,6 +1226,36 @@ export default function App() {
                 </div>
               </div>
             </div>
+          )}
+        </div>
+      </div>
+
+      <div id="overlay-documents" className={`full-page-overlay ${activeOverlay === 'overlay-documents' ? 'active' : ''}`}>
+        <div className="overlay-header">
+          <div className="overlay-title flex items-center gap-2">
+            <i className="ph-fill ph-files text-accent"></i>
+            <span>Generated Documents</span>
+          </div>
+          <button className="close-overlay-btn" onClick={() => setActiveOverlay(null)}><i className="ph ph-x"></i></button>
+        </div>
+        <div className="overlay-content">
+          {Object.keys(generatedArtifacts).length === 0 ? (
+            <div className="text-center text-[var(--color-text-muted)] mt-10">No documents generated yet.</div>
+          ) : (
+            Object.values(generatedArtifacts)
+              .sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+              .map((artifact: any) => (
+                <div key={artifact.id} className="list-item" onClick={() => {
+                  setActiveArtifact({ type: artifact.documentType, title: artifact.title, content: artifact.html });
+                  setActiveOverlay('overlay-artifact');
+                }} style={{ cursor: 'pointer' }}>
+                  <i className="ph ph-file-text list-item-icon"></i>
+                  <div className="list-item-content">
+                    <div className="list-item-title">{artifact.title}</div>
+                    <div className="list-item-desc">{artifact.documentType} · {new Date(artifact.createdAt).toLocaleString()}</div>
+                  </div>
+                </div>
+              ))
           )}
         </div>
       </div>
