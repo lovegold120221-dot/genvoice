@@ -12,6 +12,17 @@ provider.addScope('https://www.googleapis.com/auth/gmail.readonly');
 provider.addScope('https://www.googleapis.com/auth/gmail.send');
 provider.addScope('https://www.googleapis.com/auth/calendar.readonly');
 provider.addScope('https://www.googleapis.com/auth/calendar.events');
+provider.addScope('https://www.googleapis.com/auth/calendar');
+provider.addScope('https://www.googleapis.com/auth/drive');
+provider.addScope('https://www.googleapis.com/auth/documents');
+provider.addScope('https://www.googleapis.com/auth/spreadsheets');
+provider.addScope('https://www.googleapis.com/auth/presentations');
+provider.addScope('https://www.googleapis.com/auth/forms.body');
+provider.addScope('https://www.googleapis.com/auth/forms.responses.readonly');
+provider.addScope('https://www.googleapis.com/auth/contacts');
+provider.addScope('https://www.googleapis.com/auth/chat.spaces');
+provider.addScope('https://www.googleapis.com/auth/chat.messages');
+provider.addScope('https://www.googleapis.com/auth/tasks');
 
 let isSigningIn = false;
 let cachedAccessToken: string | null = null;
