@@ -575,12 +575,6 @@ export default function App() {
           </div>
         </div>
         <div className="header-right">
-          <button id="profile-open-btn" className="icon-btn" onClick={() => setActiveOverlay('overlay-profile')}>
-            <i className="ph ph-user"></i>
-          </button>
-          <button id="settings-open-btn" className="icon-btn" onClick={() => setActiveOverlay('overlay-settings')}>
-            <i className="ph ph-gear"></i>
-          </button>
           {!isConnected ? (
             <button id="connect-button" className="connect-btn" onClick={connectLiveAPI}>
               <i className="ph-fill ph-plug"></i> <span>Connect</span>
@@ -730,20 +724,29 @@ export default function App() {
           </div>
         </div>
 
-        <nav className="nav-controls">
-          <button className="nav-item relative" onClick={() => setIsMicActive(!isMicActive)} style={{ opacity: isMicActive && isConnected ? 1 : 0.5 }}>
-            <i className={`ph-fill ph-microphone${!isMicActive ? '-slash' : ''}`}></i> <span>Mic</span>
-            {isMicActive && isConnected && (
-              <div id="mic-visualizer" className="audio-visualizer mic-vis absolute -top-4 left-1/2 -translate-x-1/2">
-                <div className="bar"></div><div className="bar"></div><div className="bar"></div><div className="bar"></div>
-              </div>
-            )}
+        <nav className="nav-controls relative">
+          <button className="nav-item opacity-70 hover:opacity-100 transition-opacity" onClick={() => setActiveOverlay('overlay-profile')}>
+            <i className="ph ph-user"></i> <span>Profile</span>
           </button>
-          <button className="nav-item opacity-50">
+          <button className="nav-item opacity-70 hover:opacity-100 transition-opacity">
             <i className="ph ph-video-camera"></i> <span>Camera</span>
           </button>
-          <button className="nav-item opacity-50">
+          <div className="nav-item-mic-container">
+            <button className="nav-item-mic relative" onClick={() => setIsMicActive(!isMicActive)} style={{ backgroundColor: isMicActive && isConnected ? 'var(--color-accent-primary)' : 'var(--color-bg-chip)' }}>
+              <i className={`ph-fill ph-microphone${!isMicActive ? '-slash' : ''}`}></i>
+              {isMicActive && isConnected && (
+                <div id="mic-visualizer" className="audio-visualizer mic-vis absolute -top-8 left-1/2 -translate-x-1/2">
+                  <div className="bar"></div><div className="bar"></div><div className="bar"></div><div className="bar"></div>
+                </div>
+              )}
+            </button>
+            <span className="mic-label">Mic</span>
+          </div>
+          <button className="nav-item opacity-70 hover:opacity-100 transition-opacity">
             <i className="ph ph-screencast"></i> <span>Share</span>
+          </button>
+          <button className="nav-item opacity-70 hover:opacity-100 transition-opacity" onClick={() => setActiveOverlay('overlay-settings')}>
+            <i className="ph ph-gear"></i> <span>Settings</span>
           </button>
         </nav>
       </div>
