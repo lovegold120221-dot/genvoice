@@ -81,6 +81,12 @@ export default function App() {
   const [tasksList, setTasksList] = useState<any[]>([]);
   const [activeArtifact, setActiveArtifact] = useState<{type: string, title: string, content?: string} | null>(null);
 
+  // Video State
+  const [videoStream, setVideoStream] = useState<MediaStream | null>(null);
+  const [cameraMode, setCameraMode] = useState<'camera' | 'screen'>('camera');
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const videoIntervalRef = useRef<number | null>(null);
+
   const wsRef = useRef<WebSocket | null>(null);
   const audioPlayerRef = useRef<AudioStreamPlayer | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
@@ -302,6 +308,14 @@ export default function App() {
       audioPlayerRef.current.close();
       audioPlayerRef.current = null;
     }
+    if (videoStream) {
+      videoStream.getTracks().forEach(t => t.stop());
+      setVideoStream(null);
+    }
+    if (videoIntervalRef.current) {
+      clearInterval(videoIntervalRef.current);
+      videoIntervalRef.current = null;
+    }
     setIsConnected(false);
     setIsMicActive(false);
     setIsVisualizerActive(false);
@@ -435,6 +449,66 @@ export default function App() {
     } catch(err) {
       console.error(err);
     }
+  };
+
+  const startVideo = async (mode: 'camera' | 'screen') => {
+    try {
+      let currentStream = videoStream;
+      if (currentStream) {
+        currentStream.getTracks().forEach(track => track.stop());
+      }
+      let stream: MediaStream;
+      if (mode === 'camera') {
+         stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 }, audio: false });
+      } else {
+         stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
+      }
+      setVideoStream(stream);
+      setCameraMode(mode);
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+      }
+      setActiveOverlay('overlay-camera');
+      
+      // Send frames periodically
+      if (videoIntervalRef.current) clearInterval(videoIntervalRef.current);
+      videoIntervalRef.current = window.setInterval(sendVideoFrame, 2000); // 1 frame every 2 seconds
+    } catch (err) {
+      console.error(err);
+      alert('Could not start ' + mode + ': ' + String(err));
+    }
+  };
+
+  const stopVideo = () => {
+    if (videoStream) {
+      videoStream.getTracks().forEach(track => track.stop());
+      setVideoStream(null);
+    }
+    if (videoIntervalRef.current) {
+      clearInterval(videoIntervalRef.current);
+      videoIntervalRef.current = null;
+    }
+  };
+
+  const sendVideoFrame = () => {
+     if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
+     if (!videoRef.current) return;
+     
+     const canvas = document.createElement('canvas');
+     const vw = videoRef.current.videoWidth;
+     const vh = videoRef.current.videoHeight;
+     if (!vw || !vh) return;
+     
+     // Scale down to max 640px to save bandwidth
+     const scale = Math.min(640 / vw, 640 / vh, 1);
+     canvas.width = vw * scale;
+     canvas.height = vh * scale;
+     
+     const ctx = canvas.getContext('2d');
+     if (!ctx) return;
+     ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
+     const base64 = canvas.toDataURL('image/jpeg', 0.5).split(',')[1];
+     wsRef.current.send(JSON.stringify({ file: { type: 'image/jpeg', data: base64 } }));
   };
 
   const triggerSilentFiller = async () => {
@@ -740,7 +814,7 @@ export default function App() {
           <button className="nav-item opacity-70 hover:opacity-100 transition-opacity" onClick={() => setActiveOverlay('overlay-profile')}>
             <i className="ph ph-user"></i> <span>Profile</span>
           </button>
-          <button className="nav-item opacity-70 hover:opacity-100 transition-opacity">
+          <button className="nav-item opacity-70 hover:opacity-100 transition-opacity" onClick={() => startVideo('camera')}>
             <i className="ph ph-video-camera"></i> <span>Camera</span>
           </button>
           <div className="nav-item-mic-container">
@@ -764,6 +838,59 @@ export default function App() {
       </div>
 
       {/* OVERLAYS */}
+      <div id="overlay-camera" className={`full-page-overlay ${activeOverlay === 'overlay-camera' ? 'active' : ''}`} style={{ backgroundColor: '#000', zIndex: 60 }}>
+        <div className="overlay-header bg-black/50 border-b border-white/10 text-white backdrop-blur-md absolute top-0 left-0 right-0 z-10 w-full" style={{ padding: '16px' }}>
+          <div className="overlay-title flex items-center gap-2">
+            <i className={`ph-fill ${cameraMode === 'screen' ? 'ph-screencast' : 'ph-video-camera'} text-accent`}></i>
+            <span>{cameraMode === 'screen' ? 'Screen Share' : 'Camera'} Active</span>
+          </div>
+          <button className="close-overlay-btn text-white" onClick={() => { setActiveOverlay(null); stopVideo(); }}><i className="ph ph-x"></i></button>
+        </div>
+        <div className="flex flex-col h-full w-full relative pt-16 pb-20">
+          <video 
+            ref={videoRef} 
+            autoPlay 
+            playsInline 
+            muted 
+            className="w-full h-full object-contain bg-black"
+          />
+          {/* Audio visualizer for AI over video */}
+          {isVisualizerActive && (
+             <div className="absolute top-[40%] left-1/2 -translate-x-1/2 -translate-y-1/2 bg-black/40 rounded-full py-4 px-6 backdrop-blur-md shadow-2xl border border-white/10 flex items-center gap-3">
+                 <div className="w-10 h-10 rounded-full bg-accent/20 flex items-center justify-center">
+                    <i className="ph-fill ph-robot text-accent text-xl"></i>
+                 </div>
+                 <div className="audio-visualizer active inline m-0 origin-left">
+                   <div className="bar bg-white h-8 mx-0.5"></div><div className="bar bg-white h-12 mx-0.5" style={{animationDelay: '-0.2s'}}></div><div className="bar bg-white h-6 mx-0.5" style={{animationDelay: '-0.4s'}}></div><div className="bar bg-white h-10 mx-0.5" style={{animationDelay: '-0.6s'}}></div>
+                 </div>
+             </div>
+          )}
+          {!isConnected && (
+             <div className="absolute top-[40%] left-1/2 -translate-x-1/2 -translate-y-1/2 bg-red-500/80 rounded-full py-2 px-6 backdrop-blur-md shadow-2xl border border-white/10 text-white font-medium text-sm text-center">
+                 AI is disconnected.<br />Connect to share video.
+             </div>
+          )}
+        </div>
+        <div className="absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-black via-black/80 to-transparent flex items-center justify-center gap-6 pb-4 pt-4">
+           {/* Camera Button */}
+           <button 
+             className={`flex flex-col items-center justify-center w-14 h-14 rounded-full transition-all ${cameraMode === 'camera' ? 'bg-accent text-white scale-110 shadow-lg shadow-accent/20' : 'bg-white/10 text-white hover:bg-white/20 hover:scale-105'}`}
+             onClick={() => startVideo('camera')}
+             title="Share Camera"
+           >
+             <i className="ph-fill ph-video-camera text-2xl"></i>
+           </button>
+           {/* Screen Share Button */}
+           <button 
+             className={`flex flex-col items-center justify-center w-14 h-14 rounded-full transition-all ${cameraMode === 'screen' ? 'bg-accent text-white scale-110 shadow-lg shadow-accent/20' : 'bg-white/10 text-white hover:bg-white/20 hover:scale-105'}`}
+             onClick={() => startVideo('screen')}
+             title="Share Screen"
+           >
+             <i className="ph-fill ph-screencast text-2xl"></i>
+           </button>
+        </div>
+      </div>
+
       <div id="overlay-profile" className={`full-page-overlay ${activeOverlay === 'overlay-profile' ? 'active' : ''}`}>
         <div className="overlay-header">
           <div className="overlay-title">User Profile</div>
