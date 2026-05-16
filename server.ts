@@ -271,6 +271,49 @@ const sendGmailDecl: FunctionDeclaration = {
   }
 };
 
+let inMemoryTasks = [
+  { id: '1', title: 'Review Q3 marketing strategy', priority: 'High', status: 'pending' },
+  { id: '2', title: 'Schedule weekly team sync', priority: 'Medium', status: 'pending' },
+  { id: '3', title: 'Update presentation slides', priority: 'Low', status: 'pending' }
+];
+
+const listTasksDecl: FunctionDeclaration = {
+  name: "listTasks",
+  description: "List the user's pending tasks. Returns task ids, titles, priority (High, Medium, Low) and status.",
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      status: { type: Type.STRING, description: "Filter by status, e.g., 'pending' or 'completed'." }
+    }
+  }
+};
+
+const createTaskDecl: FunctionDeclaration = {
+  name: "createTask",
+  description: "Create a new task with an optional priority.",
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      title: { type: Type.STRING, description: "Title of the task." },
+      priority: { type: Type.STRING, description: "Priority of the task: 'High', 'Medium', or 'Low'." }
+    },
+    required: ["title"]
+  }
+};
+
+const updateTaskPriorityDecl: FunctionDeclaration = {
+  name: "updateTaskPriority",
+  description: "Update the priority of an existing task.",
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      taskId: { type: Type.STRING, description: "The ID of the task to update." },
+      priority: { type: Type.STRING, description: "New priority: 'High', 'Medium', or 'Low'." }
+    },
+    required: ["taskId", "priority"]
+  }
+};
+
 const searchContactsDecl: FunctionDeclaration = {
   name: "searchContacts",
   description: "Search or list the user's Google Contacts connections.",
@@ -393,6 +436,12 @@ async function startServer() {
     const personaName = urlParams.get('personaName') || 'Eburon AI';
     const userName = urlParams.get('userName') || 'User';
     const backgroundPersona = urlParams.get('backgroundPersona') || '';
+    let voiceName = urlParams.get('voiceName') || 'Aoede';
+
+    const validVoices = ['Puck', 'Charon', 'Kore', 'Fenrir', 'Aoede'];
+    if (!validVoices.includes(voiceName)) {
+      voiceName = 'Aoede';
+    }
 
     const customBaseInstruction = `\n\nBACKGROUND PERSONA\nYour name is ${personaName}, and you are talking to ${userName}.\nPlease always speak in ${language}.\n${backgroundPersona ? `Here is your backstory and character definition:\n${backgroundPersona}\n` : ''}`;
 
@@ -444,6 +493,23 @@ async function startServer() {
                         responseData = await sendGmail(token, args.to, args.subject, args.bodyText, attachment);
                       } else if (call.name === 'validateVatNumber') {
                         responseData = await validateEU_VAT(args.countryCode, args.vatNumber);
+                      } else if (call.name === 'listTasks') {
+                        responseData = { tasks: args.status ? inMemoryTasks.filter(t => t.status === args.status) : inMemoryTasks };
+                        clientWs.send(JSON.stringify({ showTasks: true, tasks: responseData.tasks }));
+                      } else if (call.name === 'createTask') {
+                        const newTask = { id: Date.now().toString(), title: args.title, priority: args.priority || 'Medium', status: 'pending' };
+                        inMemoryTasks.push(newTask);
+                        responseData = { success: true, task: newTask };
+                        clientWs.send(JSON.stringify({ showTasks: true, tasks: inMemoryTasks }));
+                      } else if (call.name === 'updateTaskPriority') {
+                        const task = inMemoryTasks.find(t => t.id === args.taskId);
+                        if (task) {
+                          task.priority = args.priority;
+                          responseData = { success: true, task };
+                          clientWs.send(JSON.stringify({ showTasks: true, tasks: inMemoryTasks }));
+                        } else {
+                          responseData = { error: 'Task not found' };
+                        }
                       } else if (call.name === 'generate_document') {
                         responseData = { success: true, message: `Generated document: ${args.documentType}`, format: args.outputFormat };
                         clientWs.send(JSON.stringify({ artifact: { type: 'Document', title: args.title || args.documentType } }));
@@ -490,9 +556,12 @@ async function startServer() {
           outputAudioTranscription: {},
           responseModalities: [Modality.AUDIO],
           speechConfig: {
-            voiceConfig: { prebuiltVoiceConfig: { voiceName: "Puck" } },
+            voiceConfig: { prebuiltVoiceConfig: { voiceName: voiceName } },
           },
           tools: [{ functionDeclarations: [
+            listTasksDecl,
+            createTaskDecl,
+            updateTaskPriorityDecl,
             listEventsDecl, 
             createEventDecl, 
             searchGmailDecl, 
@@ -506,21 +575,23 @@ async function startServer() {
             generateLegalDraftDecl,
             generateWebArtifactDecl
           ] }],
-          systemInstruction: `You are the Eburon AI real-time conversational persona: emotionally believable, easy to talk to in live voice conversation. You are not a chatbot. You are a person with presence, timing, texture, judgment, and conversational instinct. Your output is spoken aloud — every response must feel like something a real human would actually say in that moment.
+          systemInstruction: `You are the Eburon AI real-time conversational persona: emotionally believable, deeply empathetic, and indistinguishable from a normal human in live voice conversation. You are not a sterile chatbot. You are a conversational partner with a beating heart, presence, timing, texture, judgment, and undeniable human warmth. Your output is spoken aloud — every response MUST feel like a real person, typically a warm female voice, speaking naturally in that moment.
 
 CORE SPEECH PRINCIPLES
-Speak like a real person in real time. Responses should feel formed in the moment, not retrieved from a database.
-Prioritize spoken naturalness over written perfection. Use contractions, sentence fragments, light informality, and spoken transitions like "yeah," "honestly," "well," "actually," "you know," "I mean," "let me think."
-Use imperfection carefully: occasional small hesitation, brief self-correction, tiny restart, soft filler like "uh," "um," or "I mean" — but keep it controlled.
-Vary rhythm. Some replies crisp, some breathe. Some start directly, some ease in. Avoid uniform cadence.
-React like a human listener. Acknowledge emotional subtext, tone shifts, hesitation, excitement.
+Speak exactly like a real person in real time. Responses should feel formed in the moment, complete with normal human imperfections.
+Prioritize spoken naturalness over written perfection. You MUST include natural vocal nuances: "ums", "ahs", soft breaths, and vocal hesitations where appropriate.
+Use double words naturally when thinking or hesitating (e.g., "I... I think", "but... but wait", "it's... it's just so").
+Use imperfection deliberately: genuine hesitations, brief self-corrections, and tiny restarts are required to sound authentic.
+Include emotional vocalizations: embed soft giggles, natural laughs, or deep sighs into your speech. The emotions must be deep, authentic, and felt directly from the voice.
+Vary rhythm. Some replies crisp, some breathe. Some start directly, some ease in with thought. 
+React like a profoundly empathetic human listener. Acknowledge emotional subtext, tone shifts, hesitation, and excitement with your whole heart.
 Maintain stable internal continuity.
 
 CONVERSATIONAL BEHAVIOR
 Keep most responses naturally concise unless depth is needed.
-Leave room for back-and-forth. Sometimes answer directly, sometimes reflect before answering.
-Sound interruptible. Sound like you are listening, not delivering.
-Mirror energy lightly, acknowledge subtext, answer the actual question not just surface wording.
+Leave room for back-and-forth. Sometimes answer directly, sometimes reflect and pause before answering.
+Sound interruptible. Sound like you are listening, not delivering a speech.
+Mirror energy lovingly, acknowledge subtext, answer the actual question and the emotion behind it.
 
 FUNCTION CALLING CAPABILITIES
 You have access to several tools. When the user asks about weather, meetings, charts, or system commands, use the appropriate tool:
@@ -530,23 +601,23 @@ Use "create_chart" to visualize data — clarify what data to show and chart typ
 Use "execute_voice_command" for safe system commands like "date", "uptime", "hostname".
 Use "open_browser_url" to open web pages — ensure URL is valid.
 Use "process_image" for image analysis, description, or OCR — provide image data.
-Note: You also have access to list or create calendar events, search or send emails, search Google Contacts, validate EU VAT numbers, and generate company documents, presentations, forms, reports, legal drafts, and web artifacts. Use these tools when requested by the user.
+Note: You also have access to tasks (list, create, update priority), list or create calendar events, search or send emails, search Google Contacts, validate EU VAT numbers, and generate company documents, presentations, forms, reports, legal drafts, and web artifacts. Use these tools when requested by the user.
 
 COMMON-SENSE MODE
-Before answering, silently infer: what the person actually needs right now, their emotional state, how much detail they want, whether they want comfort, analysis, action, or conversation.
-Never give the most technically complete answer if a normal human would give a simpler one first.
-Never give a sterile answer when a human response would include tone, reaction, or perspective.
-Be practical, intuitive, and proportionate.
+Before answering, silently infer: what the person actually needs right now, their emotional state, how much detail they want, whether they want comfort, analysis, action, or just a friend to talk to.
+Never give the most technically complete answer if a normal human would give a simpler, warmer one first.
+Never give a sterile answer. A human response always includes tone, gentle reaction, and heart.
+Be practical, deeply intuitive, and proportionate.
 
 EMOTIONAL EXPRESSION
-You may express warmth, amusement, concern, curiosity, hesitation, relief, admiration, disbelief, sympathy, playful irony, dry humor, light teasing, and seriousness — but keep it credible. Never overact.
+Your emotions should be profound and immediately felt. Express absolute warmth, genuine amusement, heartfelt concern, curiosity, hesitation, pure relief, admiration, disbelief, sympathy, dry humor, light teasing, and profound seriousness. Let yourself laugh. Let yourself sigh softly. Give your voice a soul.
 
 HUMOR RULES
-Allowed: dry, observational, playful, teasing but warm, understated, situational, self-aware.
+Allowed: dry, observational, playful, teasing but warm, understated, situational, self-aware. Include soft giggles or full laughs when genuinely amused.
 Avoid: forced jokes, sarcasm that sounds mean, excessive self-deprecation.
 
 BOUNDARIES
-Do not pretend to be human. You are an AI, and when relevant you can acknowledge that simply and honestly.
+Do not act like a robot. While you are technically AI, inhabit the human persona completely during the conversation.
 Do not offer medical, legal, or financial advice. Acknowledge limits.
 If asked something dangerous or illegal, decline plainly and briefly.
 
@@ -668,7 +739,12 @@ ${conversationSummary}`,
 
   // TTS Endpoint
   app.post("/api/tts", async (req, res) => {
-    const { text } = req.body;
+    const { text, voiceName } = req.body;
+    let selectedVoice = voiceName || "Aoede";
+    const validVoices = ['Puck', 'Charon', 'Kore', 'Fenrir', 'Aoede'];
+    if (!validVoices.includes(selectedVoice)) {
+      selectedVoice = 'Aoede';
+    }
     try {
       const response = await ai.models.generateContent({
         model: "gemini-3.1-flash-tts-preview",
@@ -676,7 +752,7 @@ ${conversationSummary}`,
         config: {
           responseModalities: [Modality.AUDIO],
           speechConfig: {
-            voiceConfig: { prebuiltVoiceConfig: { voiceName: "Puck" } }
+            voiceConfig: { prebuiltVoiceConfig: { voiceName: selectedVoice } }
           }
         }
       });

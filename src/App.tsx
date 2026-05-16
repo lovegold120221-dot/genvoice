@@ -58,6 +58,7 @@ export default function App() {
   const [personaName, setPersonaName] = useState('Beatrice');
   const [userName, setUserName] = useState('');
   const [backgroundPersona, setBackgroundPersona] = useState('');
+  const [voiceName, setVoiceName] = useState('Aoede');
 
   // Filler Settings
   const [silentFillersEnabled, setSilentFillersEnabled] = useState(true);
@@ -77,6 +78,8 @@ export default function App() {
 
   // Overlays
   const [activeOverlay, setActiveOverlay] = useState<string | null>(null);
+  const [tasksList, setTasksList] = useState<any[]>([]);
+  const [activeArtifact, setActiveArtifact] = useState<{type: string, title: string, content?: string} | null>(null);
 
   const wsRef = useRef<WebSocket | null>(null);
   const audioPlayerRef = useRef<AudioStreamPlayer | null>(null);
@@ -106,6 +109,7 @@ export default function App() {
             if (data.personaName) setPersonaName(data.personaName);
             if (data.userName) setUserName(data.userName);
             if (data.backgroundPersona) setBackgroundPersona(data.backgroundPersona);
+            if (data.voiceName) setVoiceName(data.voiceName);
           }
         } catch (err) {
           console.error("Failed to load user profile:", err);
@@ -123,7 +127,8 @@ export default function App() {
         language,
         personaName,
         userName,
-        backgroundPersona
+        backgroundPersona,
+        voiceName
       }, { merge: true });
       alert("Settings saved successfully!");
     } catch(err) {
@@ -159,6 +164,7 @@ export default function App() {
       if (personaName) queryParams.append('personaName', personaName);
       if (userName) queryParams.append('userName', userName);
       if (backgroundPersona) queryParams.append('backgroundPersona', backgroundPersona);
+      if (voiceName) queryParams.append('voiceName', voiceName);
       
       const queryString = queryParams.toString();
       const wsUrl = `${protocol}://${window.location.host}/live${queryString ? `?${queryString}` : ''}`;
@@ -224,7 +230,13 @@ export default function App() {
         }
         if (msg.artifact) {
           setMessages(prev => [...prev, { id: 'artifact-' + Date.now(), role: 'ai', text: `✨ Generated ${msg.artifact.type}: ${msg.artifact.title}` }]);
+          setActiveArtifact({ type: msg.artifact.type, title: msg.artifact.title, content: msg.artifact.content });
+          setActiveOverlay('overlay-artifact');
           handleScrollToBottom();
+        }
+        if (msg.showTasks) {
+          setTasksList(msg.tasks || []);
+          setActiveOverlay('overlay-tasks');
         }
         if (msg.inputTranscription !== undefined) {
           if (!activeInputIdRef.current) {
@@ -406,7 +418,7 @@ export default function App() {
       const response = await fetch("/api/tts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text })
+        body: JSON.stringify({ text, voiceName })
       });
       if (!response.ok) {
         const errText = await response.text();
@@ -742,8 +754,8 @@ export default function App() {
             </button>
             <span className="mic-label">Mic</span>
           </div>
-          <button className="nav-item opacity-70 hover:opacity-100 transition-opacity">
-            <i className="ph ph-screencast"></i> <span>Share</span>
+          <button className="nav-item opacity-70 hover:opacity-100 transition-opacity" onClick={() => setActiveOverlay('overlay-tasks')}>
+            <i className="ph ph-list-checks"></i> <span>Tasks</span>
           </button>
           <button className="nav-item opacity-70 hover:opacity-100 transition-opacity" onClick={() => setActiveOverlay('overlay-settings')}>
             <i className="ph ph-gear"></i> <span>Settings</span>
@@ -779,6 +791,20 @@ export default function App() {
                 <option value="Italian">Italian</option>
                 <option value="Japanese">Japanese</option>
                 <option value="Korean">Korean</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-[var(--color-text-muted)] mb-1">Voice</label>
+              <select 
+                className="w-full bg-[var(--color-bg-chip)] border border-[var(--color-border-color)] rounded-lg px-3 py-2 text-white outline-none"
+                value={voiceName}
+                onChange={(e) => setVoiceName(e.target.value)}
+              >
+                <option value="Aoede">Aoede (Natural Female)</option>
+                <option value="Puck">Puck (Friendly Male)</option>
+                <option value="Charon">Charon (Deep Male)</option>
+                <option value="Fenrir">Fenrir (Natural Male)</option>
+                <option value="Kore">Kore (Soft Female)</option>
               </select>
             </div>
             <div>
@@ -862,6 +888,78 @@ export default function App() {
               <div className="list-item-desc">Manage uploaded documents</div>
             </div>
           </div>
+        </div>
+      </div>
+
+      <div id="overlay-tasks" className={`full-page-overlay ${activeOverlay === 'overlay-tasks' ? 'active' : ''}`}>
+        <div className="overlay-header">
+          <div className="overlay-title">Pending Tasks</div>
+          <button className="close-overlay-btn" onClick={() => setActiveOverlay(null)}><i className="ph ph-x"></i></button>
+        </div>
+        <div className="overlay-content">
+          {tasksList.length === 0 ? (
+            <div className="text-center text-[var(--color-text-muted)] mt-10">No pending tasks.</div>
+          ) : (
+            tasksList.map(task => (
+              <div key={task.id} className="list-item" style={{ alignItems: 'flex-start' }}>
+                <i className={`ph ${task.status === 'completed' ? 'ph-check-circle text-green-500' : 'ph-circle'} list-item-icon mt-1`}></i>
+                <div className="list-item-content flex-1">
+                  <div className="list-item-title" style={{ textDecoration: task.status === 'completed' ? 'line-through' : 'none' }}>
+                    {task.title}
+                  </div>
+                  <div className="flex items-center gap-2 mt-2">
+                    <span style={{
+                      backgroundColor: task.priority === 'High' ? 'rgba(239,68,68,0.2)' : task.priority === 'Medium' ? 'rgba(245,158,11,0.2)' : 'rgba(59,130,246,0.2)',
+                      color: task.priority === 'High' ? '#f87171' : task.priority === 'Medium' ? '#fbbf24' : '#60a5fa',
+                      padding: '2px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: 600
+                    }}>
+                      {task.priority || 'Normal'} Priority
+                    </span>
+                  </div>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+
+      <div id="overlay-artifact" className={`full-page-overlay ${activeOverlay === 'overlay-artifact' ? 'active' : ''}`} style={{ backgroundColor: 'var(--color-bg-main)', zIndex: 60 }}>
+        <div className="overlay-header" style={{ borderBottom: '1px solid var(--color-border-color)' }}>
+          <div className="overlay-title flex items-center gap-2">
+            <i className="ph-fill ph-browser text-accent"></i>
+            <span>Live Server Preview: {activeArtifact?.title || 'Web Artifact'}</span>
+          </div>
+          <button className="close-overlay-btn" onClick={() => setActiveOverlay(null)}><i className="ph ph-x"></i></button>
+        </div>
+        <div style={{ height: 'calc(100vh - 64px)', overflow: 'auto', padding: '20px', backgroundColor: '#f0f0f5', color: '#1a1a1a' }}>
+          {activeArtifact?.content ? (
+            <div dangerouslySetInnerHTML={{ __html: activeArtifact.content }} />
+          ) : (
+            <div className="flex flex-col items-center justify-center h-full text-gray-500 gap-4">
+              <i className="ph-duotone ph-file-code text-6xl text-gray-400"></i>
+              <h2 className="text-xl font-semibold">Simulated Render for {activeArtifact?.type}</h2>
+              <p className="text-center max-w-md">
+                The artifact <strong>"{activeArtifact?.title}"</strong> has been successfully generated by Eburon AI and deployed to the local preview server.
+              </p>
+              <div className="mt-8 p-6 bg-white rounded-xl shadow-sm border border-gray-200 w-full max-w-2xl">
+                <div className="flex items-center gap-3 mb-4 pb-4 border-b border-gray-100">
+                  <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold">
+                    {activeArtifact?.type.charAt(0).toUpperCase()}
+                  </div>
+                  <div>
+                    <div className="font-semibold text-gray-800">{activeArtifact?.title}</div>
+                    <div className="text-xs text-gray-500">Generated just now • {activeArtifact?.type}</div>
+                  </div>
+                </div>
+                <div className="space-y-3">
+                  <div className="h-4 bg-gray-100 rounded w-3/4"></div>
+                  <div className="h-4 bg-gray-100 rounded w-full"></div>
+                  <div className="h-4 bg-gray-100 rounded w-5/6"></div>
+                  <div className="h-4 bg-gray-100 rounded w-2/3"></div>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
