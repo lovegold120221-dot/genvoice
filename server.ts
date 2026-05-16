@@ -490,7 +490,7 @@ async function startServer() {
           outputAudioTranscription: {},
           responseModalities: [Modality.AUDIO],
           speechConfig: {
-            voiceConfig: { prebuiltVoiceConfig: { voiceName: "Aoede" } },
+            voiceConfig: { prebuiltVoiceConfig: { voiceName: "Puck" } },
           },
           tools: [{ functionDeclarations: [
             listEventsDecl, 
@@ -690,7 +690,7 @@ ${conversationSummary}`,
         config: {
           responseModalities: [Modality.AUDIO],
           speechConfig: {
-            voiceConfig: { prebuiltVoiceConfig: { voiceName: "Aoede" } }
+            voiceConfig: { prebuiltVoiceConfig: { voiceName: "Puck" } }
           }
         }
       });

@@ -586,8 +586,8 @@ export default function App() {
               <i className="ph-fill ph-plug"></i> <span>Connect</span>
             </button>
           ) : (
-            <button className="connect-btn bg-red-500 hover:bg-red-600" onClick={cleanupConnection}>
-              Disconnect
+            <button className="connect-btn connected" onClick={cleanupConnection}>
+              <i className="ph-fill ph-plugs"></i> <span>Disconnect</span>
             </button>
           )}
         </div>

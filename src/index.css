@@ -168,7 +168,7 @@ button:active, .skill-chip:active, .nav-item:active, .list-item:active {
 }
 
 .icon-btn {
-  background-color: rgba(255, 255, 255, 0.08);
+  background-color: var(--color-bg-chip);
   width: 36px;
   height: 36px;
   border-radius: 50%;
@@ -177,14 +177,23 @@ button:active, .skill-chip:active, .nav-item:active, .list-item:active {
   justify-content: center;
   color: var(--color-text-main);
   font-size: 18px;
-  border: 0.5px solid rgba(255,255,255,0.05);
-  box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+  border: 1px solid rgba(255,255,255,0.05);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  transition: all 0.2s cubic-bezier(0.2, 0, 0, 1);
+  cursor: pointer;
+}
+.icon-btn:hover {
+  transform: scale(1.05);
+  background-color: rgba(255, 255, 255, 0.15);
+}
+.icon-btn:active {
+  transform: scale(0.95);
 }
 
 .connect-btn {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   background-color: var(--color-accent-primary);
   color: #fff;
   border: none;
@@ -192,6 +201,24 @@ button:active, .skill-chip:active, .nav-item:active, .list-item:active {
   border-radius: 20px;
   font-weight: 600;
   font-size: 14px;
+  transition: all 0.2s cubic-bezier(0.2, 0, 0, 1);
+  box-shadow: 0 4px 12px rgba(10, 132, 255, 0.3);
+  cursor: pointer;
+}
+.connect-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(10, 132, 255, 0.4);
+}
+.connect-btn:active {
+  transform: scale(0.96) translateY(0);
+}
+.connect-btn.connected {
+  background-color: #ef4444;
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
+}
+.connect-btn.connected:hover {
+  background-color: #dc2626;
+  box-shadow: 0 6px 16px rgba(239, 68, 68, 0.4);
 }
 
 /* ---------------------------------------------------
@@ -341,6 +368,12 @@ button:active, .skill-chip:active, .nav-item:active, .list-item:active {
   display: flex;
   align-items: center;
   justify-content: center;
+  transition: color 0.2s ease, transform 0.2s ease;
+  cursor: pointer;
+}
+.attach-btn:hover {
+  color: var(--color-accent-primary);
+  transform: scale(1.1);
 }
 
 #message-input {
@@ -366,6 +399,16 @@ button:active, .skill-chip:active, .nav-item:active, .list-item:active {
   justify-content: center;
   font-size: 18px;
   margin-left: 8px;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 12px rgba(10, 132, 255, 0.3);
+  cursor: pointer;
+}
+.send-btn:hover {
+  transform: scale(1.05);
+  box-shadow: 0 6px 16px rgba(10, 132, 255, 0.4);
+}
+.send-btn:active {
+  transform: scale(0.95);
 }
 
 .nav-controls {
@@ -437,6 +480,12 @@ button:active, .skill-chip:active, .nav-item:active, .list-item:active {
   border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
   font-size: 18px;
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+.close-overlay-btn:hover {
+  background: rgba(255, 255, 255, 0.15);
+  transform: scale(1.05);
 }
 
 .overlay-content {
