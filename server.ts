@@ -138,6 +138,48 @@ const sendGmail = async (token: string, to: string, subject: string, bodyText: s
   return await response.json();
 };
 
+const searchContacts = async (token: string, query: string = "", maxResults: number = 10) => {
+  if (query) {
+    const url = new URL("https://people.googleapis.com/v1/people:searchContacts");
+    url.searchParams.append("query", query);
+    url.searchParams.append("readMask", "names,emailAddresses,phoneNumbers");
+    url.searchParams.append("pageSize", maxResults.toString());
+
+    const response = await fetch(url.toString(), {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    if (!response.ok) throw new Error(await response.text());
+    const data = await response.json();
+    return {
+      contacts: (data.results || []).map((r: any) => {
+        const c = r.person;
+        return {
+          name: c.names?.[0]?.displayName || 'Unknown',
+          emails: c.emailAddresses?.map((e: any) => e.value) || [],
+          phones: c.phoneNumbers?.map((p: any) => p.value) || []
+        };
+      })
+    };
+  } else {
+    const url = new URL("https://people.googleapis.com/v1/people/me/connections");
+    url.searchParams.append("personFields", "names,emailAddresses,phoneNumbers");
+    url.searchParams.append("pageSize", maxResults.toString());
+
+    const response = await fetch(url.toString(), {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    if (!response.ok) throw new Error(await response.text());
+    const data = await response.json();
+    return {
+      contacts: (data.connections || []).map((c: any) => ({
+        name: c.names?.[0]?.displayName || 'Unknown',
+        emails: c.emailAddresses?.map((e: any) => e.value) || [],
+        phones: c.phoneNumbers?.map((p: any) => p.value) || []
+      }))
+    };
+  }
+};
+
 const validateEU_VAT = async (countryCode: string, vatNumber: string) => {
   const url = "https://ec.europa.eu/taxation_customs/vies/rest-api/check-vat-number";
   const response = await fetch(url, {
@@ -226,6 +268,18 @@ const sendGmailDecl: FunctionDeclaration = {
       attachmentContentBase64: { type: Type.STRING, description: "Optional base64 encoded content for the attachment." }
     },
     required: ["to", "subject", "bodyText"]
+  }
+};
+
+const searchContactsDecl: FunctionDeclaration = {
+  name: "searchContacts",
+  description: "Search or list the user's Google Contacts connections.",
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      query: { type: Type.STRING, description: "Optional name, email, or phone to search for. Leave empty to return recent connections." },
+      maxResults: { type: Type.NUMBER, description: "Maximum number of contacts to fetch. Defaults to 10." }
+    }
   }
 };
 
@@ -376,6 +430,8 @@ async function startServer() {
                         responseData = await createCalendarEvent(token, args.summary, args.description || '', args.startTime, args.endTime, args.location, args.recurrence, args.attendees);
                       } else if (call.name === 'searchGmail') {
                         responseData = await searchGmail(token, args.query, args.maxResults);
+                      } else if (call.name === 'searchContacts') {
+                        responseData = await searchContacts(token, args.query, args.maxResults);
                       } else if (call.name === 'sendGmail') {
                         let attachment;
                         if (args.attachmentFilename && args.attachmentContentBase64) {
@@ -441,6 +497,7 @@ async function startServer() {
             createEventDecl, 
             searchGmailDecl, 
             sendGmailDecl, 
+            searchContactsDecl,
             validateVatDecl,
             generateDocumentDecl,
             generatePresentationDecl,
@@ -473,7 +530,7 @@ Use "create_chart" to visualize data — clarify what data to show and chart typ
 Use "execute_voice_command" for safe system commands like "date", "uptime", "hostname".
 Use "open_browser_url" to open web pages — ensure URL is valid.
 Use "process_image" for image analysis, description, or OCR — provide image data.
-Note: You also have access to list or create calendar events, search or send emails, validate EU VAT numbers, and generate company documents, presentations, forms, reports, legal drafts, and web artifacts. Use these tools when requested by the user.
+Note: You also have access to list or create calendar events, search or send emails, search Google Contacts, validate EU VAT numbers, and generate company documents, presentations, forms, reports, legal drafts, and web artifacts. Use these tools when requested by the user.
 
 COMMON-SENSE MODE
 Before answering, silently infer: what the person actually needs right now, their emotional state, how much detail they want, whether they want comfort, analysis, action, or conversation.

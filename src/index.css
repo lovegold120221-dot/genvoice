@@ -263,8 +263,6 @@ button:active, .skill-chip:active, .nav-item:active, .list-item:active {
   padding: 20px;
   display: flex;
   flex-direction: column;
-  justify-content: flex-end;
-  gap: 24px;
   z-index: 5;
   -webkit-overflow-scrolling: touch;
 }
@@ -274,6 +272,7 @@ button:active, .skill-chip:active, .nav-item:active, .list-item:active {
   flex-direction: column;
   gap: 24px;
   padding-bottom: 10px;
+  margin-top: auto;
 }
 
 .conversation-message {
