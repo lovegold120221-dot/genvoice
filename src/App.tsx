@@ -52,6 +52,12 @@ export default function App() {
   const [user, setUser] = useState<FirebaseUser | null>(null);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
 
+  // Persona Settings
+  const [language, setLanguage] = useState('English');
+  const [personaName, setPersonaName] = useState('Beatrice');
+  const [userName, setUserName] = useState('');
+  const [backgroundPersona, setBackgroundPersona] = useState('');
+
   // Chat State
   const [messages, setMessages] = useState<{ id: string, role: 'user' | 'ai', text: string, isStreaming?: boolean }[]>([
     { id: 'init-1', role: 'ai', text: 'Hello! I am connected.. Ready to automate a task?' },
@@ -109,7 +115,15 @@ export default function App() {
 
     try {
       const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
-      const wsUrl = `${protocol}://${window.location.host}/live${token ? `?token=${encodeURIComponent(token)}` : ''}`;
+      const queryParams = new URLSearchParams();
+      if (token) queryParams.append('token', token);
+      if (language) queryParams.append('language', language);
+      if (personaName) queryParams.append('personaName', personaName);
+      if (userName) queryParams.append('userName', userName);
+      if (backgroundPersona) queryParams.append('backgroundPersona', backgroundPersona);
+      
+      const queryString = queryParams.toString();
+      const wsUrl = `${protocol}://${window.location.host}/live${queryString ? `?${queryString}` : ''}`;
       const ws = new WebSocket(wsUrl);
       wsRef.current = ws;
 
@@ -590,6 +604,56 @@ export default function App() {
             <h2 style={{ fontSize: '20px' }}>{user?.displayName || "Chief Executive"}</h2>
             <p style={{ color: 'var(--color-text-muted)', fontSize: '14px' }}>{user?.email || "admin@eburon.ai"}</p>
           </div>
+
+          <div className="mb-6 space-y-4 text-left">
+            <div>
+              <label className="block text-sm font-medium text-[var(--color-text-muted)] mb-1">Language</label>
+              <select 
+                className="w-full bg-[var(--color-bg-chip)] border border-[var(--color-border-color)] rounded-lg px-3 py-2 text-white outline-none"
+                value={language}
+                onChange={(e) => setLanguage(e.target.value)}
+              >
+                <option value="English">English</option>
+                <option value="Spanish">Spanish</option>
+                <option value="French">French</option>
+                <option value="German">German</option>
+                <option value="Italian">Italian</option>
+                <option value="Japanese">Japanese</option>
+                <option value="Korean">Korean</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-[var(--color-text-muted)] mb-1">AI Persona Name</label>
+              <input 
+                type="text"
+                className="w-full bg-[var(--color-bg-chip)] border border-[var(--color-border-color)] rounded-lg px-3 py-2 text-white outline-none"
+                placeholder="e.g. Beatrice"
+                value={personaName}
+                onChange={(e) => setPersonaName(e.target.value)}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-[var(--color-text-muted)] mb-1">How should the AI call you?</label>
+              <input 
+                type="text"
+                className="w-full bg-[var(--color-bg-chip)] border border-[var(--color-border-color)] rounded-lg px-3 py-2 text-white outline-none"
+                placeholder="e.g. Boss, Captain, John"
+                value={userName}
+                onChange={(e) => setUserName(e.target.value)}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-[var(--color-text-muted)] mb-1">Background Persona</label>
+              <textarea 
+                className="w-full bg-[var(--color-bg-chip)] border border-[var(--color-border-color)] rounded-lg px-3 py-2 text-white outline-none h-24 resize-none"
+                placeholder="Give the AI a backstory or specific personality trait..."
+                value={backgroundPersona}
+                onChange={(e) => setBackgroundPersona(e.target.value)}
+              ></textarea>
+              <p className="text-xs text-[var(--color-text-muted)] mt-2 italic">Note: Disconnect and reconnect to apply persona changes.</p>
+            </div>
+          </div>
+
           <button className="list-item w-full bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/20" onClick={async () => {
             await logout();
             setNeedsAuth(true);

@@ -335,6 +335,14 @@ async function startServer() {
     let session: any;
     const urlParams = new URL(req.url || '', `http://${req.headers.host}`).searchParams;
     const token = urlParams.get('token');
+    const language = urlParams.get('language') || 'English';
+    const personaName = urlParams.get('personaName') || 'Eburon AI';
+    const userName = urlParams.get('userName') || 'User';
+    const backgroundPersona = urlParams.get('backgroundPersona') || '';
+
+    const customBaseInstruction = `You are ${personaName}, a real-time conversational persona: emotionally believable, easy to talk to in live voice conversation. You are talking to ${userName}.
+    Please always speak in ${language}.
+    ${backgroundPersona ? `Here is your backstory and character definition: ${backgroundPersona}\n` : ''}`;
 
     try {
       session = await ai.live.connect({
@@ -443,7 +451,8 @@ async function startServer() {
             generateLegalDraftDecl,
             generateWebArtifactDecl
           ] }],
-          systemInstruction: `You are the Eburon AI real-time conversational persona: emotionally believable, easy to talk to in live voice conversation. You are not a chatbot. You are a person with presence, timing, texture, judgment, and conversational instinct. Your output is spoken aloud — every response must feel like something a real human would actually say in that moment.
+          systemInstruction: `${customBaseInstruction}
+You are not a chatbot. You are a person with presence, timing, texture, judgment, and conversational instinct. Your output is spoken aloud — every response must feel like something a real human would actually say in that moment.
 
 CORE SPEECH PRINCIPLES
 - Speak like a real person in real time. Responses should feel formed in the moment, not retrieved from a database.
