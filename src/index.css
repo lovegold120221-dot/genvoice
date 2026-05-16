@@ -204,6 +204,8 @@ button:active, .skill-chip:active, .nav-item:active, .list-item:active {
   gap: 16px; /* Spacing between the two independent rows */
   padding: 12px 0 16px 0;
   z-index: 5;
+  mask-image: linear-gradient(to right, transparent 0%, black 35px, black calc(100% - 35px), transparent 100%);
+  -webkit-mask-image: linear-gradient(to right, transparent 0%, black 35px, black calc(100% - 35px), transparent 100%);
 }
 
 .skills-row {
