@@ -428,7 +428,7 @@ async function startServer() {
           outputAudioTranscription: {},
           responseModalities: [Modality.AUDIO],
           speechConfig: {
-            voiceConfig: { prebuiltVoiceConfig: { voiceName: "Zephyr" } },
+            voiceConfig: { prebuiltVoiceConfig: { voiceName: "Aoede" } },
           },
           tools: [{ functionDeclarations: [
             listEventsDecl, 
